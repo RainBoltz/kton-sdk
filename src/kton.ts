@@ -1,8 +1,9 @@
-import { Address, beginCell, toNano } from "@ton/core";
+import { Address, beginCell, toNano, Cell } from "@ton/core";
 import { Api, ApyHistory, HttpClient, NftItem } from "tonapi-sdk-js";
 import { BLOCKCHAIN, CONTRACT, TIMING } from "./constants";
 import { NetworkCache } from "./cache";
 import { log } from "./utils";
+import { parsePoolFullData } from "./pool";
 
 interface SendTransactionResponse {
   boc: string;
@@ -27,7 +28,7 @@ interface WalletAccount {
 interface IWalletConnector {
   wallet: { account?: WalletAccount };
   sendTransaction: (
-    transactionDetails: TransactionDetails,
+    transactionDetails: TransactionDetails
   ) => Promise<SendTransactionResponse>;
   onStatusChange: (callback: (wallet: any) => void) => void;
 }
@@ -46,14 +47,12 @@ interface NftItemWithEstimates extends NftItem {
   KTONAmount: number;
 }
 
-export interface RoundInfo {
+export interface PayoutData {
+  deposit_payout: string;
+  deposit_amount: string;
   withdrawal_payout: string;
-  cycle_start: number;
-  cycle_end: number;
-}
-
-export interface WithdrawalPayoutData {
-  active_collections: RoundInfo[];
+  withdrawal_amount: string;
+  cycle_end: string;
 }
 
 class KTON extends EventTarget {
@@ -73,14 +72,14 @@ class KTON extends EventTarget {
     partnerCode = CONTRACT.PARTNER_CODE,
     tonApiKey,
     cacheFor,
-    isTestnet = false
+    isTestnet = false,
   }: KTONOptions) {
     super();
     this.connector = connector;
     this.partnerCode = partnerCode;
     this.tonApiKey = tonApiKey;
     this.cache = new NetworkCache(
-      cacheFor === undefined ? TIMING.CACHE_TIMEOUT : cacheFor,
+      cacheFor === undefined ? TIMING.CACHE_TIMEOUT : cacheFor
     );
     this.ready = false;
     this.isTestnet = isTestnet;
@@ -91,23 +90,38 @@ class KTON extends EventTarget {
     });
   }
 
-  private async getWithdrawalPayouts(): Promise<WithdrawalPayoutData | undefined> {
+  private async getPayouts(): Promise<PayoutData | undefined> {
     try {
-
       const requestOptions: RequestInit = {
         method: "GET",
         redirect: "follow",
       };
 
-      const response = await fetch("https://api.tonstakers.com/api/v1/pool/withdrawal_payout", requestOptions);
+      const response = await fetch(
+        "https://api.tonstakers.com/cache/v1/blockchain/staking",
+        requestOptions
+      );
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
-      const result = await response.json();
-      return result.data;
+      const tonstakersApiResult = await response.json();
+
+      const parsedPoolFullData = await this.fetchStakingPoolInfo();
+
+      return {
+        deposit_payout: parsedPoolFullData.depositPayout
+          ? parsedPoolFullData.depositPayout.toString()
+          : "",
+        deposit_amount: parsedPoolFullData.requestedForDeposit.toString(),
+        withdrawal_payout: parsedPoolFullData.withdrawalPayout
+          ? parsedPoolFullData.withdrawalPayout.toString()
+          : "",
+        withdrawal_amount: parsedPoolFullData.requestedForWithdrawal.toString(),
+        cycle_end: tonstakersApiResult.data.staking_data.cycle_end.toString(),
+      };
     } catch (error) {
-      console.error('Error fetching withdrawal payouts:', error);
+      console.error("Error fetching withdrawal payouts:", error);
       return undefined;
     }
   }
@@ -116,11 +130,11 @@ class KTON extends EventTarget {
     log("Setting up KTON SDK, isTestnet:", this.isTestnet);
     const baseApiParams = this.tonApiKey
       ? {
-        headers: {
-          Authorization: `Bearer ${this.tonApiKey}`,
-          "Content-type": "application/json",
-        },
-      }
+          headers: {
+            Authorization: `Bearer ${this.tonApiKey}`,
+            "Content-type": "application/json",
+          },
+        }
       : {};
     const httpClient = new HttpClient({
       baseUrl: this.isTestnet ? BLOCKCHAIN.API_URL_TESTNET : BLOCKCHAIN.API_URL,
@@ -128,7 +142,7 @@ class KTON extends EventTarget {
     });
     this.client = new Api(httpClient);
     this.stakingContractAddress = Address.parse(
-      CONTRACT.STAKING_CONTRACT_ADDRESS,
+      CONTRACT.STAKING_CONTRACT_ADDRESS
     );
   }
 
@@ -158,7 +172,7 @@ class KTON extends EventTarget {
 
     if (!KTON.jettonWalletAddress) {
       KTON.jettonWalletAddress = await this.getJettonWalletAddress(
-        this.walletAddress,
+        this.walletAddress
       );
     }
 
@@ -170,19 +184,13 @@ class KTON extends EventTarget {
 
   async fetchStakingPoolInfo(ttl?: number) {
     const getPoolInfo = async () => {
-      const poolInfo = await this.client.staking.getStakingPoolInfo(
-        this.stakingContractAddress!.toString(),
-      );
       const poolFullData =
         await this.client.blockchain.execGetMethodForBlockchainAccount(
           this.stakingContractAddress!.toString(),
-          "get_pool_full_data",
+          "get_pool_full_data"
         );
 
-      return {
-        poolInfo: poolInfo.pool,
-        poolFullData: poolFullData.decoded,
-      };
+      return parsePoolFullData(poolFullData.stack);
     };
 
     return this.cache.get("poolInfo", getPoolInfo, ttl);
@@ -193,7 +201,14 @@ class KTON extends EventTarget {
       throw new Error("Staking contract address not set.");
     try {
       const response = await this.fetchStakingPoolInfo(ttl);
-      return response.poolInfo.apy;
+
+      const roundRoi =
+        (response.interestRate / 2 ** 24) *
+        (1 - response.governanceFee / 2 ** 24);
+      const roundsPerYear = (365 * 24 * 60 * 60) / 65536;
+      const apy = (roundRoi * roundsPerYear) / 2;
+
+      return apy;
     } catch {
       console.error("Failed to get current APY");
       throw new Error("Could not retrieve current APY.");
@@ -206,8 +221,10 @@ class KTON extends EventTarget {
     if (!stakingAddress) throw new Error("Staking contract address not set.");
 
     try {
-      const stakingHistory = await this.cache.get("stakingHistory", () =>
-        this.client!.staking.getStakingPoolHistory(stakingAddress.toString()),
+      const stakingHistory = await this.cache.get(
+        "stakingHistory",
+        () =>
+          this.client!.staking.getStakingPoolHistory(stakingAddress.toString()),
         ttl
       );
       return stakingHistory.apy;
@@ -222,7 +239,13 @@ class KTON extends EventTarget {
       throw new Error("Staking contract address not set.");
     try {
       const response = await this.fetchStakingPoolInfo(ttl);
-      return response.poolInfo.total_amount;
+
+      const tvl =
+        response.totalBalance +
+        response.currentRound.borrowed +
+        response.previousRound.borrowed;
+
+      return Number(tvl);
     } catch {
       console.error("Failed to get TVL");
       throw new Error("Could not retrieve TVL.");
@@ -233,8 +256,11 @@ class KTON extends EventTarget {
     if (!this.stakingContractAddress)
       throw new Error("Staking contract address not set.");
     try {
-      const response = await this.fetchStakingPoolInfo(ttl);
-      return response.poolInfo.current_nominators;
+      const poolFullData = await this.fetchStakingPoolInfo(ttl);
+      const response = await this.client.jettons.getJettonInfo(
+        poolFullData.poolJettonMinter.toString()
+      );
+      return response.holders_count;
     } catch {
       console.error("Failed to get stakers count");
       throw new Error("Could not retrieve stakers count.");
@@ -247,12 +273,12 @@ class KTON extends EventTarget {
     try {
       const poolData = await this.fetchStakingPoolInfo(ttl);
 
-      const poolBalance = poolData.poolFullData.total_balance;
-      const poolSupply = poolData.poolFullData.supply;
+      const poolBalance = poolData.totalBalance;
+      const poolSupply = poolData.supply;
       const KTONTON = poolBalance / poolSupply;
 
-      const poolProjectedBalance = poolData.poolFullData.projected_balance;
-      const poolProjectedSupply = poolData.poolFullData.projected_supply;
+      const poolProjectedBalance = poolData.projectedTotalBalance;
+      const poolProjectedSupply = poolData.projectedPoolSupply;
       const KTONTONProjected = poolProjectedBalance / poolProjectedSupply;
 
       const TONUSD = await this.getTonPrice(ttl);
@@ -273,19 +299,21 @@ class KTON extends EventTarget {
 
   async clearStorageUserData(): Promise<void> {
     this.cache.clear([
-      'network-cache-withdrawals',
-      'network-cache-stakedBalance',
-      'network-cache-account'
+      "network-cache-payouts",
+      "network-cache-stakedBalance",
+      "network-cache-account",
     ]);
   }
 
   private async getTonPrice(ttl?: number): Promise<number> {
     try {
-      const response = await this.cache.get("tonPrice", () =>
-        this.client!.rates.getRates({
-          tokens: ["ton"],
-          currencies: ["usd"],
-        }),
+      const response = await this.cache.get(
+        "tonPrice",
+        () =>
+          this.client!.rates.getRates({
+            tokens: ["ton"],
+            currencies: ["usd"],
+          }),
         ttl
       );
 
@@ -309,7 +337,7 @@ class KTON extends EventTarget {
         () =>
           this.client!.blockchain.execGetMethodForBlockchainAccount(
             addressString,
-            "get_wallet_data",
+            "get_wallet_data"
           ),
         ttl
       );
@@ -328,8 +356,9 @@ class KTON extends EventTarget {
     if (!walletAddress) throw new Error("Wallet is not connected.");
 
     try {
-      const account = await this.cache.get("account", () =>
-        this.client!.accounts.getAccount(walletAddress.toString()),
+      const account = await this.cache.get(
+        "account",
+        () => this.client!.accounts.getAccount(walletAddress.toString()),
         ttl
       );
 
@@ -344,7 +373,7 @@ class KTON extends EventTarget {
     if (!walletAddress) throw new Error("Wallet is not connected.");
 
     try {
-      const balance = await this.getBalance(ttl)
+      const balance = await this.getBalance(ttl);
       const availableBalance =
         balance - Number(toNano(CONTRACT.RECOMMENDED_FEE_RESERVE));
 
@@ -354,17 +383,28 @@ class KTON extends EventTarget {
     }
   }
 
-  async getInstantLiquidity(ttl?: number): Promise<number> {
-    const account = await this.cache.get("contract-account", () =>
-      this.client!.accounts.getAccount(
-        this.isTestnet
-          ? CONTRACT.STAKING_CONTRACT_ADDRESS_TESTNET
-          : CONTRACT.STAKING_CONTRACT_ADDRESS,
-      ),
+  // this is not the real instant liquidity, but the balance of the staking contract
+  // instant liquidity is the amount of TON that can be withdrawn immediately, so it should be `total_balance - requested_for_withdrawal`
+  async getInstantLiquidityDeprecated(ttl?: number): Promise<number> {
+    const account = await this.cache.get(
+      "contract-account",
+      () =>
+        this.client!.accounts.getAccount(
+          this.isTestnet
+            ? CONTRACT.STAKING_CONTRACT_ADDRESS_TESTNET
+            : CONTRACT.STAKING_CONTRACT_ADDRESS
+        ),
       ttl
     );
 
     return account.balance;
+  }
+
+  async getInstantLiquidity(ttl?: number): Promise<number> {
+    const poolFullData = await this.fetchStakingPoolInfo(ttl);
+    const instantLiquidity =
+      poolFullData.totalBalance - poolFullData.requestedForWithdrawal;
+    return Number(instantLiquidity);
   }
 
   async stake(amount: number): Promise<SendTransactionResponse> {
@@ -377,7 +417,7 @@ class KTON extends EventTarget {
     const result = await this.sendTransaction(
       this.stakingContractAddress!,
       totalAmount,
-      payload,
+      payload
     );
     log(`Staked ${amount} TON successfully.`);
     return result;
@@ -398,7 +438,7 @@ class KTON extends EventTarget {
     const result = await this.sendTransaction(
       KTON.jettonWalletAddress,
       toNano(CONTRACT.UNSTAKE_FEE_RES),
-      payload,
+      payload
     ); // Includes transaction fee
     log(`Initiated unstaking of ${amount} KTON.`);
     return result;
@@ -412,7 +452,7 @@ class KTON extends EventTarget {
     const result = await this.sendTransaction(
       KTON.jettonWalletAddress,
       toNano(CONTRACT.UNSTAKE_FEE_RES),
-      payload,
+      payload
     ); // Includes transaction fee
     log(`Initiated instant unstaking of ${amount} KTON.`);
     return result;
@@ -426,7 +466,7 @@ class KTON extends EventTarget {
     const result = await this.sendTransaction(
       KTON.jettonWalletAddress,
       toNano(CONTRACT.UNSTAKE_FEE_RES),
-      payload,
+      payload
     ); // Includes transaction fee
     log(`Initiated unstaking of ${amount} KTON at the best rate.`);
     return result;
@@ -434,53 +474,77 @@ class KTON extends EventTarget {
 
   async getActiveWithdrawalNFTs(ttl?: number): Promise<NftItemWithEstimates[]> {
     try {
-      const withdrawalPayouts = await this.cache.get(
-        "withdrawalPayouts",
-        () =>
-          this.getWithdrawalPayouts(),
+      const payouts = await this.cache.get(
+        "payouts",
+        () => this.getPayouts(),
         ttl
       );
-      if (!withdrawalPayouts) {
-        throw new Error("Failed to get withdrawal payouts.");
+      if (!payouts) {
+        throw new Error("Failed to get payouts.");
       }
-      const { active_collections } = withdrawalPayouts;
 
-      const nftPromises = active_collections.map((collection) =>
-        this.cache.get(
-          `withdrawals-${collection.withdrawal_payout}`,
-          () => this.getFilteredByAddressNFTs(collection.withdrawal_payout, collection.cycle_end * 1000),
+      const nfts = [];
+      if (payouts.deposit_payout) {
+        const nft = await this.cache.get(
+          `payouts-${payouts.deposit_payout}`,
+          () =>
+            this.getFilteredByAddressNFTs(
+              payouts.withdrawal_payout,
+              Number(payouts.cycle_end)
+            ),
           ttl
-        )
-      );
+        );
+        nfts.push(nft);
+      }
+      if (payouts.withdrawal_payout) {
+        const nft = await this.cache.get(
+          `payouts-${payouts.withdrawal_payout}`,
+          () =>
+            this.getFilteredByAddressNFTs(
+              payouts.withdrawal_payout,
+              Number(payouts.cycle_end)
+            ),
+          ttl
+        );
+        nfts.push(nft);
+      }
 
-      const nftResults = await Promise.all(nftPromises);
-      return nftResults.flat();
+      return nfts.flat();
     } catch (error) {
       console.error(
         "Failed to get active withdrawals:",
-        error instanceof Error ? error.message : error,
+        error instanceof Error ? error.message : error
       );
       throw new Error("Failed to get active withdrawals.");
     }
   }
 
-  private async getFilteredByAddressNFTs(payoutAddress: string, endDate: number): Promise<NftItemWithEstimates[]> {
+  private async getFilteredByAddressNFTs(
+    payoutAddress: string,
+    endDate: number
+  ): Promise<NftItemWithEstimates[]> {
     try {
-      const payoutNftCollection = await this.client.nft.getItemsFromCollection(payoutAddress);
+      const payoutNftCollection = await this.client.nft.getItemsFromCollection(
+        payoutAddress
+      );
       const endDateInSeconds = Math.floor(endDate / 1000);
       const filteredItems: NftItemWithEstimates[] = [];
       let itemsBeforeCount = 0;
 
       for (const item of payoutNftCollection.nft_items) {
         if (item.owner?.address === this.walletAddress?.toRawString()) {
-          const positionBasedTime = itemsBeforeCount * TIMING.ESTIMATED_TIME_BW_TX_S;
-          const estimatedPayoutTimeInSeconds = endDateInSeconds + positionBasedTime + TIMING.ESTIMATED_TIME_AFTER_ROUND_S;
+          const positionBasedTime =
+            itemsBeforeCount * TIMING.ESTIMATED_TIME_BW_TX_S;
+          const estimatedPayoutTimeInSeconds =
+            endDateInSeconds +
+            positionBasedTime +
+            TIMING.ESTIMATED_TIME_AFTER_ROUND_S;
 
           filteredItems.push({
             ...item,
             estimatedPayoutDateTime: estimatedPayoutTimeInSeconds,
             roundEndTime: endDateInSeconds,
-            KTONAmount: Number(item.metadata.name?.match(/[\d.]+/)[0]) || 0
+            KTONAmount: Number(item.metadata.name?.match(/[\d.]+/)[0]) || 0,
           });
         }
         itemsBeforeCount++;
@@ -497,7 +561,7 @@ class KTON extends EventTarget {
     operation: "stake" | "unstake",
     amount: number,
     waitTillRoundEnd: boolean = false,
-    fillOrKill: boolean = false,
+    fillOrKill: boolean = false
   ): string {
     let cell = beginCell();
 
@@ -516,7 +580,7 @@ class KTON extends EventTarget {
             beginCell()
               .storeUint(Number(waitTillRoundEnd), 1)
               .storeUint(Number(fillOrKill), 1)
-              .endCell(),
+              .endCell()
           );
         break;
     }
@@ -525,24 +589,22 @@ class KTON extends EventTarget {
   }
 
   private async getJettonWalletAddress(
-    walletAddress: Address,
+    walletAddress: Address
   ): Promise<Address> {
     try {
       const responsePool = await this.fetchStakingPoolInfo();
-      const jettonMinterAddress = Address.parse(
-        responsePool.poolInfo.liquid_jetton_master!,
-      );
+      const jettonMinterAddress = responsePool.poolJettonMinter;
       const responseJetton =
         await this.client.blockchain.execGetMethodForBlockchainAccount(
           jettonMinterAddress.toString(),
           "get_wallet_address",
-          { args: [walletAddress.toString()] },
+          { args: [walletAddress.toString()] }
         );
       return Address.parse(responseJetton.decoded.jetton_wallet_address);
     } catch (error) {
       console.error(
         "Failed to get jetton wallet address:",
-        error instanceof Error ? error.message : error,
+        error instanceof Error ? error.message : error
       );
       throw new Error("Could not retrieve jetton wallet address.");
     }
@@ -557,7 +619,7 @@ class KTON extends EventTarget {
   private sendTransaction(
     address: Address,
     amount: bigint,
-    payload: string,
+    payload: string
   ): Promise<SendTransactionResponse> {
     const validUntil = +new Date() + TIMING.TIMEOUT;
     const transaction: TransactionDetails = {

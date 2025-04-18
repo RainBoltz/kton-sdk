@@ -1,5 +1,14 @@
 # KTON SDK
 
+<img src="https://kton.io/logo.svg" width="300">
+
+![npm](https://img.shields.io/npm/v/kton-sdk?color=red&label=npm%20version)
+![npm](https://img.shields.io/npm/dt/kton-sdk?color=red&label=npm%20downloads)
+![GitHub](https://img.shields.io/github/license/rainboltz/kton-sdk?color=blue&label=license)
+
+> *forked via [tonstakers-sdk](https://github.com/tonstakers/tonstakers-sdk)*
+
+
 KTON SDK offers an advanced set of tools for developers aiming to incorporate staking functionalities into their applications on the TON blockchain. This updated version introduces a more extensive interaction with the TON ecosystem, including staking operations, balance inquiries, and much more, enhancing your application's capabilities.
 
 ## Features
@@ -49,7 +58,7 @@ export const tonConnectUI = new TonConnectUI({
 
 const kton = new KTON({
   connector: yourWalletConnector, // Your wallet connector
-  partnerCode: 123456, // Optional partner code
+  partnerCode: 123456, // Optional partner code, limited to 64-bits
   tonApiKey: "YOUR_API_KEY", // Optional API key for tonapi
   isTestnet: false, // Optional testnet flag
 });

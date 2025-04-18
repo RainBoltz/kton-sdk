@@ -50,14 +50,14 @@
 
   <script>
     const connector = new TonConnectSDK.TonConnect({
-      manifestUrl: "https://gist.githubusercontent.com/RainBoltz/f55db40402cc474a6aec49926c2e548a/raw/59dde4317387986af127c3037ab43e6bcdc0a09e/kton-demo-dapp-tonconnect-manifest.json",
+      manifestUrl: "https://gist.githubusercontent.com/RainBoltz/f55db40402cc474a6aec49926c2e548a/raw/6f6902b79f7c7605a391328377d42bddcbdf230e/kton-demo-dapp-tonconnect-manifest.json",
     });
     const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ connector });
 
     const { KTON } = KTONSDK;
     const kton = new KTON({
       connector,
-      partnerCode: 123456,
+      partnerCode: 888888,
       isTestnet: new URLSearchParams(window.location.search).get("testnet") !== null,
     });
 
@@ -73,7 +73,7 @@
         const stakers = await kton.getStakersCount(600000);
         document.getElementById("stakers").innerText = stakers;
 
-        const [roundStart, roundEnd] = await kton.getRoundTimestamps(
+        const { roundStart, roundEnd } = await kton.getRoundTimestamps(
           5000
         );
         document.getElementById(

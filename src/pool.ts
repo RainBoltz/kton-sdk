@@ -16,14 +16,15 @@ export function parsePoolFullData(stack: TvmStackRecord[]) {
   }
   let savedValidatorSetHash = BigInt(stack[index++].num ?? 0);
 
+  let prvIndex = 0;
   let prv = stack[index++].tuple!;
-  let prvBorrowers = prv[index++].cell;
-  let prvRoundId = Number(prv[index++].num);
-  let prvActiveBorrowers = BigInt(prv[index++].num ?? 0);
-  let prvBorrowed = BigInt(prv[index++].num ?? 0);
-  let prvExpected = BigInt(prv[index++].num ?? 0);
-  let prvReturned = BigInt(prv[index++].num ?? 0);
-  let prvProfit = BigInt(prv[index++].num ?? 0);
+  let prvBorrowers = prv[prvIndex++].cell;
+  let prvRoundId = Number(prv[prvIndex++].num);
+  let prvActiveBorrowers = BigInt(prv[prvIndex++].num ?? 0);
+  let prvBorrowed = BigInt(prv[prvIndex++].num ?? 0);
+  let prvExpected = BigInt(prv[prvIndex++].num ?? 0);
+  let prvReturned = BigInt(prv[prvIndex++].num ?? 0);
+  let prvProfit = BigInt(prv[prvIndex++].num ?? 0);
   let previousRound = {
     borrowers: prvBorrowers,
     roundId: prvRoundId,
@@ -34,16 +35,17 @@ export function parsePoolFullData(stack: TvmStackRecord[]) {
     profit: prvProfit,
   };
 
+  let curIndex = 0;
   let cur = stack[index++].tuple!;
-  let curBorrowers = cur[index++].cell;
-  let curRoundId = Number(cur[index++].num);
-  let curActiveBorrowers = BigInt(cur[index++].num ?? 0);
-  let curBorrowed = BigInt(cur[index++].num ?? 0);
-  let curExpected = BigInt(cur[index++].num ?? 0);
-  let curReturned = BigInt(cur[index++].num ?? 0);
-  let curProfit = BigInt(cur[index++].num ?? 0);
+  let curBorrowers = cur[curIndex++].cell ?? Cell.EMPTY;
+  let curRoundId = Number(cur[curIndex++].num);
+  let curActiveBorrowers = BigInt(cur[curIndex++].num ?? 0);
+  let curBorrowed = BigInt(cur[curIndex++].num ?? 0);
+  let curExpected = BigInt(cur[curIndex++].num ?? 0);
+  let curReturned = BigInt(cur[curIndex++].num ?? 0);
+  let curProfit = BigInt(cur[curIndex++].num ?? 0);
   let currentRound = {
-    borrowers: curBorrowers,
+    borrowers: curBorrowers.toString(),
     roundId: curRoundId,
     activeBorrowers: curActiveBorrowers,
     borrowed: curBorrowed,
@@ -67,7 +69,8 @@ export function parsePoolFullData(stack: TvmStackRecord[]) {
 
   let poolJettonMinter = Cell.fromHex(stack[index++].cell!)
     .beginParse()
-    .loadAddress();
+    .loadAddress()
+    .toString();
   let poolJettonSupply = BigInt(stack[index++].num ?? 0);
 
   let depositPayout = Cell.fromHex(stack[index++].cell!)
@@ -83,13 +86,23 @@ export function parsePoolFullData(stack: TvmStackRecord[]) {
   let sudoer = Cell.fromHex(stack[index++].cell!).beginParse().loadAddressAny();
   let sudoerSetAt = Number(stack[index++].num);
 
-  let governor = Cell.fromHex(stack[index++].cell!).beginParse().loadAddress();
+  let governor = Cell.fromHex(stack[index++].cell!)
+    .beginParse()
+    .loadAddress()
+    .toString();
   let governorUpdateAfter = Number(stack[index++].num);
   let interestManager = Cell.fromHex(stack[index++].cell!)
     .beginParse()
-    .loadAddress();
-  let halter = Cell.fromHex(stack[index++].cell!).beginParse().loadAddress();
-  let approver = Cell.fromHex(stack[index++].cell!).beginParse().loadAddress();
+    .loadAddress()
+    .toString();
+  let halter = Cell.fromHex(stack[index++].cell!)
+    .beginParse()
+    .loadAddress()
+    .toString();
+  let approver = Cell.fromHex(stack[index++].cell!)
+    .beginParse()
+    .loadAddress()
+    .toString();
 
   let controllerCode = stack[index++].cell;
   let jettonWalletCode = stack[index++].cell;
@@ -121,12 +134,12 @@ export function parsePoolFullData(stack: TvmStackRecord[]) {
     poolJettonMinter,
     poolJettonSupply,
     supply: poolJettonSupply,
-    depositPayout,
+    depositPayout: depositPayout ? depositPayout.toString() : null,
     requestedForDeposit,
-    withdrawalPayout,
+    withdrawalPayout: withdrawalPayout ? withdrawalPayout.toString() : null,
     requestedForWithdrawal,
 
-    sudoer,
+    sudoer: sudoer ? sudoer.toString() : null,
     sudoerSetAt,
     governor,
     governorUpdateAfter,

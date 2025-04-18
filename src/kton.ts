@@ -1,4 +1,4 @@
-import { Address, beginCell, toNano, Cell } from "@ton/core";
+import { Address, beginCell, toNano, Cell, fromNano } from "@ton/core";
 import { Api, ApyHistory, HttpClient, NftItem } from "tonapi-sdk-js";
 import { BLOCKCHAIN, CONTRACT, TIMING } from "./constants";
 import { NetworkCache } from "./cache";
@@ -118,7 +118,7 @@ class KTON extends EventTarget {
           ? parsedPoolFullData.withdrawalPayout.toString()
           : "",
         withdrawal_amount: parsedPoolFullData.requestedForWithdrawal.toString(),
-        cycle_end: tonstakersApiResult.data.staking_data.cycle_end.toString(),
+        cycle_end: tonstakersApiResult.data.staking_data.cycleEnd.toString(),
       };
     } catch (error) {
       console.error("Error fetching withdrawal payouts:", error);
@@ -275,11 +275,14 @@ class KTON extends EventTarget {
 
       const poolBalance = poolData.totalBalance;
       const poolSupply = poolData.supply;
-      const KTONTON = poolBalance / poolSupply;
+      const KTONTON =
+        Number(fromNano(poolBalance)) / Number(fromNano(poolSupply));
 
       const poolProjectedBalance = poolData.projectedTotalBalance;
       const poolProjectedSupply = poolData.projectedPoolSupply;
-      const KTONTONProjected = poolProjectedBalance / poolProjectedSupply;
+      const KTONTONProjected =
+        Number(fromNano(poolProjectedBalance)) /
+        Number(fromNano(poolProjectedSupply));
 
       const TONUSD = await this.getTonPrice(ttl);
       return {
@@ -633,6 +636,42 @@ class KTON extends EventTarget {
       ],
     };
     return this.connector.sendTransaction(transaction);
+  }
+
+  async getRoundTimestamps(): Promise<{
+    roundStart: number;
+    roundEnd: number;
+  }> {
+    try {
+      const requestOptions: RequestInit = {
+        method: "GET",
+        redirect: "follow",
+      };
+
+      const response = await fetch(
+        "https://api.tonstakers.com/cache/v1/blockchain/staking",
+        requestOptions
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const tonstakersApiResult = await response.json();
+
+      return {
+        roundStart:
+          Number(tonstakersApiResult.data.staking_data.cycleEnd) - 65536,
+        roundEnd: Number(
+          tonstakersApiResult.data.staking_data.cycleEnd.toString()
+        ),
+      };
+    } catch (error) {
+      console.error("Error fetching blockchain staking", error);
+      return {
+        roundStart: 0,
+        roundEnd: 0,
+      };
+    }
   }
 }
 

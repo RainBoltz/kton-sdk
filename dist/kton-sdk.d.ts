@@ -1,6 +1,4 @@
-import { Address } from '@ton/core';
 import { ApyHistory } from 'tonapi-sdk-js';
-import { ExternalAddress } from '@ton/core';
 import { NftItem } from 'tonapi-sdk-js';
 
 declare interface IWalletConnector {
@@ -47,7 +45,7 @@ export declare class KTON extends EventTarget {
             profit: bigint;
         };
         currentRound: {
-            borrowers: string | undefined;
+            borrowers: string;
             roundId: number;
             activeBorrowers: bigint;
             borrowed: bigint;
@@ -61,20 +59,20 @@ export declare class KTON extends EventTarget {
         accruedGovernanceFee: bigint;
         disbalanceTolerance: number;
         creditStartPriorElectionsEnd: number;
-        poolJettonMinter: Address;
+        poolJettonMinter: string;
         poolJettonSupply: bigint;
         supply: bigint;
-        depositPayout: Address | ExternalAddress | null;
+        depositPayout: string | null;
         requestedForDeposit: bigint;
-        withdrawalPayout: Address | ExternalAddress | null;
+        withdrawalPayout: string | null;
         requestedForWithdrawal: bigint;
-        sudoer: Address | ExternalAddress | null;
+        sudoer: string | null;
         sudoerSetAt: number;
-        governor: Address;
+        governor: string;
         governorUpdateAfter: number;
-        interestManager: Address;
-        halter: Address;
-        approver: Address;
+        interestManager: string;
+        halter: string;
+        approver: string;
         controllerCode: string | undefined;
         jettonWalletCode: string | undefined;
         payoutMinterCode: string | undefined;
@@ -105,6 +103,10 @@ export declare class KTON extends EventTarget {
     private getJettonWalletAddress;
     private validateAmount;
     private sendTransaction;
+    getRoundTimestamps(): Promise<{
+        roundStart: number;
+        roundEnd: number;
+    }>;
 }
 
 declare interface KTONOptions {

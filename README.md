@@ -6,8 +6,7 @@
 ![npm](https://img.shields.io/npm/dt/kton-sdk?color=red&label=npm%20downloads)
 ![GitHub](https://img.shields.io/github/license/rainboltz/kton-sdk?color=blue&label=license)
 
-> *forked via [tonstakers-sdk](https://github.com/tonstakers/tonstakers-sdk)*
-
+> _forked via [tonstakers-sdk](https://github.com/tonstakers/tonstakers-sdk)_
 
 KTON SDK offers an advanced set of tools for developers aiming to incorporate staking functionalities into their applications on the TON blockchain. This updated version introduces a more extensive interaction with the TON ecosystem, including staking operations, balance inquiries, and much more, enhancing your application's capabilities.
 
@@ -121,9 +120,6 @@ console.log(`Available balance for staking: ${availableBalance}`);
 const currentApy = await kton.getCurrentApy();
 console.log(`Current APY: ${currentApy}%`);
 
-const historicalApy = await kton.getHistoricalApy();
-console.log(`Historical APY data: ${historicalApy}`);
-
 const tvl = await kton.getTvl();
 console.log(`Total Value Locked (TVL): ${tvl}`);
 
@@ -135,8 +131,8 @@ console.log(`1 TON = ${rates.TONUSD} USD`);
 console.log(`1 KTON = ${rates.KTONTON} TON`);
 console.log(`Projected 1 KTON = ${rates.KTONTONProjected} TON`);
 
-const [cycleStart, cycleEnd] = await tonstakers.getRoundTimestamps();
-console.log(`Cycle start: ${cycleStart}, Cycle end: ${cycleEnd}`);
+const { roundStart, roundEnd } = await tonstakers.getRoundTimestamps();
+console.log(`Cycle start: ${roundStart}, Cycle end: ${roundEnd}`);
 
 const activeWithdrawals = await tonstakers.getActiveWithdrawalNFTs();
 console.log(`Active withdrawal NFTs: ${JSON.stringify(activeWithdrawals)}`);

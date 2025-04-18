@@ -673,6 +673,13 @@ class KTON extends EventTarget {
       };
     }
   }
+
+  static toReadableAddress(
+    address: string,
+    bounceable: boolean = true
+  ): string {
+    return Address.parse(address).toString({ bounceable });
+  }
 }
 
 export { KTON };

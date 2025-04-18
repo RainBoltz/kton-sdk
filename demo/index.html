@@ -97,7 +97,7 @@
       if (wallet?.account?.address) {
         const address = wallet.account.address;
 
-        document.getElementById("walletAddress").innerText = address;
+        document.getElementById("walletAddress").innerText = address ? KTON.toReadableAddress(address) : "";
         document.getElementById("connectWallet").style.display = "none";
         document.getElementById("disconnectWallet").style.display = "inline";
 
@@ -189,7 +189,7 @@
     document
       .getElementById("getRounds")
       .addEventListener("click", async () => {
-        const [roundStart, roundEnd] = await kton.getRoundTimestamps(
+        const { roundStart, roundEnd } = await kton.getRoundTimestamps(
           5000
         );
         document.getElementById(

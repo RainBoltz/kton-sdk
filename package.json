@@ -1,0 +1,34 @@
+{
+  "name": "kton-sdk",
+  "version": "0.0.1",
+  "description": "KTON SDK",
+  "license": "MIT",
+  "repository": "git@github.com:rainboltz/kton-sdk.git",
+  "main": "dist/kton-sdk.min.js",
+  "types": "dist/kton-sdk.d.ts",
+  "scripts": {
+    "build": "tsc && vite build"
+  },
+  "keywords": [
+    "kton",
+    "ton",
+    "sdk"
+  ],
+  "files": [
+    "src",
+    "dist"
+  ],
+  "dependencies": {
+    "@ton/core": "^0.60.1",
+    "@ton/crypto": "^3.3.0",
+    "@ton/ton": "^15.2.1",
+    "tonapi-sdk-js": "^2.0.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.2",
+    "vite-plugin-dts": "^4.5.3",
+    "vite-plugin-node-polyfills": "^0.23.0"
+  }
+}

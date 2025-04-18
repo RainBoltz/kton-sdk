@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KTON SDK Demo</title>
+    <script src="../dist/kton-sdk.min.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
+  </head>
+
+  <body>
+    <h1>KTON SDK Demo</h1>
+    <button id="connectWallet">Connect Wallet</button>
+    <button id="disconnectWallet" style="display: none">
+      Disconnect Wallet
+    </button>
+    <button id="stake">Stake 1 TON</button>
+    <button id="stakeMax">Stake MAX</button>
+    <button id="unstake">Unstake 1 tsTON</button>
+    <button id="unstakeInstant">Unstake 1 tsTON Instant</button>
+    <button id="unstakeBestRate">Unstake 1 tsTON Best Rate</button>
+    <button id="refreshBalances">Refresh Balances</button>
+    <button id="getRounds">Get Rounds info</button>
+    <button id="getWithdrawals">Get Withdrawal List</button>
+    <button id="getPoolData">Get Pool Data</button>
+    <br /><br />
+    <div id="walletAddressDisplay">
+      Wallet Address: <span id="walletAddress"></span>
+    </div>
+    <div id="balanceDisplay">Balance TON: <span id="balance"></span></div>
+    <div id="availableBalanceDisplay">
+      Available to stake: <span id="availableBalance"></span>
+    </div>
+    <div id="stakedBalanceDisplay">
+      Staked TON (KTON): <span id="stakedBalance"></span>
+    </div>
+    <div id="apyDisplay">APY: <span id="apy"></span></div>
+    <div id="tvlDisplay">TVL: <span id="tvl"></span></div>
+    <div id="stakersDisplay">Stakers: <span id="stakers"></span></div>
+    <div id="roundsDisplay">Rounds: <span id="rounds"></span></div>
+    <div id="TONUSDRateDisplay">1 TON = <span id="TONUSD">0</span>$</div>
+    <div id="TONtsTONRateDisplay">
+      1 KTON = <span id="tsTONTON">0</span> TON
+    </div>
+    <div id="activeWithdrawals"></div>
+    <br /><br />
+    <code id="poolDataDisplay"></code>
+
+    <script>
+      const connector = new TonConnectSDK.TonConnect({
+        manifestUrl: "https://gist.githubusercontent.com/RainBoltz/f55db40402cc474a6aec49926c2e548a/raw/59dde4317387986af127c3037ab43e6bcdc0a09e/kton-demo-dapp-tonconnect-manifest.json",
+      });
+      const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ connector });
+      
+      const { KTON } = KTONSDK;
+      const kton = new KTON({
+        connector,
+        partnerCode: 123456,
+        isTestnet: new URLSearchParams(window.location.search).get("testnet") !== null,
+      });
+
+      // Fetch and display APY, TVL, and Stakers count on page load
+      window.addEventListener("DOMContentLoaded", async () => {
+        try {
+          const apy = await kton.getCurrentApy(600000);
+          document.getElementById("apy").innerText = apy;
+
+          const tvl = await kton.getTvl(600000);
+          document.getElementById("tvl").innerText = tvl / 1000000000;
+
+          const stakers = await kton.getStakersCount(600000);
+          document.getElementById("stakers").innerText = stakers;
+
+          const [roundStart, roundEnd] = await kton.getRoundTimestamps(
+            5000
+          );
+          document.getElementById(
+            "rounds"
+          ).innerText = `start ${roundStart}, end ${roundEnd}`;
+
+          const rates = await kton.getRates(600000);
+          document.getElementById("TONUSD").innerText = rates.TONUSD;
+          document.getElementById("tsTONTON").innerText = rates.tsTONTON;
+        } catch (error) {
+          console.error("Error fetching initial data:", error);
+        }
+      });
+
+      kton.addEventListener("initialized", async () => {
+        getStakedBalance();
+        getAvailableBalance();
+      });
+
+      const unsubscribe = tonConnectUI.onStatusChange((wallet) => {
+        if (wallet?.account?.address) {
+          const address = wallet.account.address;
+
+          document.getElementById("walletAddress").innerText = address;
+          document.getElementById("connectWallet").style.display = "none";
+          document.getElementById("disconnectWallet").style.display = "inline";
+
+          getWalletBalance();
+        }
+      });
+
+      document
+        .getElementById("connectWallet")
+        .addEventListener("click", async () => {
+          await tonConnectUI.openModal();
+        });
+
+      document
+        .getElementById("disconnectWallet")
+        .addEventListener("click", async () => {
+          await kton.clearStorageUserData();
+          await tonConnectUI.disconnect();
+          document.getElementById("connectWallet").style.display = "inline";
+          document.getElementById("disconnectWallet").style.display = "none";
+          document.getElementById("walletAddress").innerText = "";
+          document.getElementById("balance").innerText = "";
+          document.getElementById("stakedBalance").innerText = "";
+          document.getElementById("availableBalance").innerText = "";
+        });
+
+      document.getElementById("stake").addEventListener("click", async () => {
+        if (kton) {
+          await kton.stake(1); // Example stake amount
+          console.log("Staked 1 TON");
+        } else {
+          console.error("Wallet not connected");
+        }
+      });
+
+      document
+        .getElementById("stakeMax")
+        .addEventListener("click", async () => {
+          if (kton) {
+            await kton.stakeMax();
+            console.log("Staked MAX TON");
+          } else {
+            console.error("Wallet not connected");
+          }
+        });
+
+      document.getElementById("unstake").addEventListener("click", async () => {
+        if (kton) {
+          await kton.unstake(1); // Example unstake amount
+          console.log("Unstaked 1 tsTON");
+        } else {
+          console.error("Wallet not connected");
+        }
+      });
+
+      document
+        .getElementById("unstakeInstant")
+        .addEventListener("click", async () => {
+          if (kton) {
+            await kton.unstakeInstant(1); // Example unstake amount
+            console.log("Unstaked 1 tsTON Instant");
+          } else {
+            console.error("Wallet not connected");
+          }
+        });
+
+      document
+        .getElementById("unstakeBestRate")
+        .addEventListener("click", async () => {
+          if (kton) {
+            await kton.unstakeBestRate(1); // Example unstake amount
+            console.log("Unstaked 1 tsTON Best Rate");
+          } else {
+            console.error("Wallet not connected");
+          }
+        });
+
+      document
+        .getElementById("getPoolData")
+        .addEventListener("click", async () => {
+          const poolData = await kton.fetchStakingPoolInfo(5000);
+          document.getElementById("poolDataDisplay").innerText = JSON.stringify(
+            poolData,
+            null,
+            2
+          );
+        });
+
+      document
+        .getElementById("getRounds")
+        .addEventListener("click", async () => {
+          const [roundStart, roundEnd] = await kton.getRoundTimestamps(
+            5000
+          );
+          document.getElementById(
+            "rounds"
+          ).innerText = `start: ${roundStart}, end: ${roundEnd}`;
+        });
+
+      document
+        .getElementById("getWithdrawals")
+        .addEventListener("click", async () => {
+          const activeWithdrawalsDiv =
+            document.getElementById("activeWithdrawals");
+          activeWithdrawalsDiv.innerHTML = "";
+
+          const activeWithdrawals = await kton.getActiveWithdrawalNFTs(
+            10000
+          );
+          if (!activeWithdrawals.length) {
+            activeWithdrawalsDiv.innerText = "you have no active withdrawals";
+            return;
+          }
+          const formatTime = (seconds) => {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours} hours, ${minutes} minutes`;
+          };
+
+          activeWithdrawals.forEach((withdrawal) => {
+            const estimatedTime = formatTime(
+              withdrawal.estimatedPayoutDateTime - Math.floor(Date.now() / 1000)
+            );
+            const roundEnds = formatTime(
+              withdrawal.roundEndTime - Math.floor(Date.now() / 1000)
+            );
+            const estimatedTimeInQueue = formatTime(
+              withdrawal.estimatedPayoutDateTime - withdrawal.roundEndTime
+            );
+            const withdrawalDiv = document.createElement("div");
+            withdrawalDiv.classList.add("withdrawal-item");
+            const withdrawalInfo = `
+                            <strong>Withdrawal ${withdrawal.tsTONAmount} tsTON</strong><br>
+                            <span>Estimated Payout Time: <em>${estimatedTime}</em></span><br>
+                            <span>Estimated Time in Queue: <em>${estimatedTimeInQueue}</em></span><br>
+                            <span>Round Ends: <em>${roundEnds}</em></span><br>
+                            <span>Transfer TX: <em>${withdrawal.address}</em></span><br>
+                            <span>Collection: <em>${withdrawal.collection?.address}</em></span><br>
+                            <hr>
+                        `;
+            withdrawalDiv.innerHTML = withdrawalInfo;
+            activeWithdrawalsDiv.appendChild(withdrawalDiv);
+          });
+        });
+
+      async function getWalletBalance() {
+        const balance = await kton.getBalance(10000);
+        document.getElementById("balance").innerText = balance / 1000000000;
+      }
+
+      async function getStakedBalance() {
+        const stakedBalance = await kton.getStakedBalance(10000);
+        document.getElementById("stakedBalance").innerText =
+          stakedBalance / 1000000000;
+      }
+
+      async function getAvailableBalance() {
+        const availableBalance = await kton.getAvailableBalance(10000);
+        document.getElementById("availableBalance").innerText =
+          availableBalance / 1000000000;
+      }
+
+      document
+        .getElementById("refreshBalances")
+        .addEventListener("click", () => {
+          getWalletBalance();
+          getStakedBalance();
+        });
+    </script>
+  </body>
+</html>

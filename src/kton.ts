@@ -43,7 +43,7 @@ interface KTONOptions {
 interface NftItemWithEstimates extends NftItem {
   estimatedPayoutDateTime: number;
   roundEndTime: number;
-  tsTONAmount: number;
+  KTONAmount: number;
 }
 
 export interface RoundInfo {
@@ -249,17 +249,17 @@ class KTON extends EventTarget {
 
       const poolBalance = poolData.poolFullData.total_balance;
       const poolSupply = poolData.poolFullData.supply;
-      const tsTONTON = poolBalance / poolSupply;
+      const KTONTON = poolBalance / poolSupply;
 
       const poolProjectedBalance = poolData.poolFullData.projected_balance;
       const poolProjectedSupply = poolData.poolFullData.projected_supply;
-      const tsTONTONProjected = poolProjectedBalance / poolProjectedSupply;
+      const KTONTONProjected = poolProjectedBalance / poolProjectedSupply;
 
       const TONUSD = await this.getTonPrice(ttl);
       return {
         TONUSD,
-        tsTONTON,
-        tsTONTONProjected,
+        KTONTON,
+        KTONTONProjected,
       };
     } catch {
       console.error("Failed to get rates");
@@ -315,7 +315,7 @@ class KTON extends EventTarget {
       );
 
       const formattedBalance = jettonWalletData.decoded.balance;
-      log(`Current tsTON balance: ${formattedBalance}`);
+      log(`Current KTON balance: ${formattedBalance}`);
 
       return formattedBalance;
     } catch {
@@ -400,7 +400,7 @@ class KTON extends EventTarget {
       toNano(CONTRACT.UNSTAKE_FEE_RES),
       payload,
     ); // Includes transaction fee
-    log(`Initiated unstaking of ${amount} tsTON.`);
+    log(`Initiated unstaking of ${amount} KTON.`);
     return result;
   }
 
@@ -414,7 +414,7 @@ class KTON extends EventTarget {
       toNano(CONTRACT.UNSTAKE_FEE_RES),
       payload,
     ); // Includes transaction fee
-    log(`Initiated instant unstaking of ${amount} tsTON.`);
+    log(`Initiated instant unstaking of ${amount} KTON.`);
     return result;
   }
 
@@ -428,7 +428,7 @@ class KTON extends EventTarget {
       toNano(CONTRACT.UNSTAKE_FEE_RES),
       payload,
     ); // Includes transaction fee
-    log(`Initiated unstaking of ${amount} tsTON at the best rate.`);
+    log(`Initiated unstaking of ${amount} KTON at the best rate.`);
     return result;
   }
 
@@ -480,7 +480,7 @@ class KTON extends EventTarget {
             ...item,
             estimatedPayoutDateTime: estimatedPayoutTimeInSeconds,
             roundEndTime: endDateInSeconds,
-            tsTONAmount: Number(item.metadata.name?.match(/[\d.]+/)[0]) || 0
+            KTONAmount: Number(item.metadata.name?.match(/[\d.]+/)[0]) || 0
           });
         }
         itemsBeforeCount++;
